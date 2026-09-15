@@ -281,6 +281,11 @@ function resolveLocalSandboxRootParent(appDataDir: string): string {
   return path.join(appDataDir, 'sandboxes');
 }
 
+/** Parent for direct sandbox roots. Same env-paths data dir as SQLite. Env: `DIRECT_SANDBOX_ROOT_DIR`. */
+function resolveDirectSandboxRootDir(appDataDir: string): string {
+  return getEnv('DIRECT_SANDBOX_ROOT_DIR', { required: false }) ?? path.join(appDataDir, 'sandboxes');
+}
+
 /** Short tmp parent for Code Mode UDS socks (≤65 bytes after realpath). */
 function resolveCodeModeSocketParent(): string {
   return path.join(os.tmpdir(), 'tf_cms');
@@ -485,6 +490,18 @@ export interface SharedServerConfiguration {
    * Env: `SANDBOX_FILE_MAX_BYTES_FOR_DOWNLOAD`. Default 20 MB (same as gateway).
    */
   SANDBOX_FILE_MAX_BYTES_FOR_DOWNLOAD: number;
+  /**
+   * Direct sandbox: exec runs as plain host processes (the microVM is the
+   * security boundary). Zero external dependencies; when enabled and a tenant
+   * has no stored provider row, the direct provider is the default.
+   * Env: `DIRECT_SANDBOX_ENABLED`. Default true.
+   */
+  DIRECT_SANDBOX_ENABLED: boolean;
+  /**
+   * Parent directory for direct sandbox roots.
+   * Env: `DIRECT_SANDBOX_ROOT_DIR`. Default `{env-paths data}/sandboxes`.
+   */
+  DIRECT_SANDBOX_ROOT_DIR: string;
   /**
    * Max bytes for an HTTP request body. Env: `MAX_REQUEST_BODY_BYTES`. Default 30 MB.
    */
@@ -743,6 +760,12 @@ const shared: SharedServerConfiguration = {
     raw: getEnv('SANDBOX_FILE_MAX_BYTES_FOR_DOWNLOAD'),
     defaultValue: 20_971_520,
   }),
+  DIRECT_SANDBOX_ENABLED: parseBoolean({
+    envKey: 'DIRECT_SANDBOX_ENABLED',
+    raw: getEnv('DIRECT_SANDBOX_ENABLED'),
+    defaultValue: true,
+  }),
+  DIRECT_SANDBOX_ROOT_DIR: resolveDirectSandboxRootDir(appDataDir),
   MAX_REQUEST_BODY_BYTES: parsePositiveInt({
     envKey: 'MAX_REQUEST_BODY_BYTES',
     raw: getEnv('MAX_REQUEST_BODY_BYTES'),

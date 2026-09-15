@@ -1,4 +1,4 @@
-import { getPublicUiBasePath, type ServerConfiguration } from '../../../src/config';
+import configuration, { getPublicUiBasePath, type ServerConfiguration } from '../../../src/config';
 import { resolveTrueFoundrySandboxProviderConfig } from '../../../src/truefoundry/resolveTrueFoundrySandboxProviderConfig';
 
 /** Minimal distributed config slice for resolve tests (unused fields are irrelevant). */
@@ -127,5 +127,16 @@ describe('getPublicUiBasePath', () => {
         PUBLIC_BASE_URL: 'https://host.example/custom/proxy/path',
       } as ServerConfiguration),
     ).toBe('/custom/proxy/path/');
+  });
+});
+
+describe('direct sandbox configuration defaults', () => {
+  it('enables the direct sandbox by default (zero-config)', () => {
+    expect(configuration.DIRECT_SANDBOX_ENABLED).toBe(true);
+  });
+
+  it('resolves DIRECT_SANDBOX_ROOT_DIR to an absolute path under the app data dir', () => {
+    expect(configuration.DIRECT_SANDBOX_ROOT_DIR.length).toBeGreaterThan(0);
+    expect(configuration.DIRECT_SANDBOX_ROOT_DIR.startsWith('/')).toBe(true);
   });
 });

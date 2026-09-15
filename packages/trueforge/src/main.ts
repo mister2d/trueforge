@@ -588,6 +588,10 @@ try {
     version: PACKAGE_VERSION,
   });
 
+  if (configuration.DIRECT_SANDBOX_ENABLED) {
+    await mkdir(configuration.DIRECT_SANDBOX_ROOT_DIR, { recursive: true });
+  }
+
   if (configuration.STANDALONE) {
     printStandaloneStartupBanner({ version: PACKAGE_VERSION, color: shouldColorize() });
     await prepareCodeModeSocketParent({ path: configuration.CODE_MODE_SOCKET_PARENT, logger });
