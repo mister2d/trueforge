@@ -38,15 +38,26 @@ const ImportGithubSkillForm = ({ open, onOpenChange, onImport, busy = false, err
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
-    if (!name.trim() || !description.trim() || !repoURL.trim() || !path.trim() || !ref.trim() || busy) return;
+    const trimmedName = name.trim();
+    const trimmedDescription = description.trim();
+    const trimmedRepoURL = repoURL.trim();
+    const trimmedPath = path.trim();
+    const trimmedRef = ref.trim() || 'main';
+
+    if (!trimmedName || !trimmedDescription || !trimmedRepoURL || busy) return;
+
+    const normalizedPath =
+      trimmedPath === '.' || trimmedPath === '/' || trimmedPath === './'
+        ? ''
+        : trimmedPath.replace(/^\.?\/+/, '').replace(/\/+$/, '');
 
     try {
       await onImport({
-        name: name.trim(),
-        description: description.trim(),
-        repoURL: repoURL.trim(),
-        path: path.trim(),
-        ref: ref.trim(),
+        name: trimmedName,
+        description: trimmedDescription,
+        repoURL: trimmedRepoURL,
+        path: normalizedPath,
+        ref: trimmedRef,
       });
       close();
     } catch {
@@ -54,7 +65,7 @@ const ImportGithubSkillForm = ({ open, onOpenChange, onImport, busy = false, err
     }
   };
 
-  const canImport = Boolean(name.trim() && description.trim() && repoURL.trim() && path.trim() && ref.trim()) && !busy;
+  const canImport = Boolean(name.trim() && description.trim() && repoURL.trim()) && !busy;
 
   return (
     <CenteredModal
@@ -135,10 +146,12 @@ const ImportGithubSkillForm = ({ open, onOpenChange, onImport, busy = false, err
               onChange={event => {
                 setPath(event.target.value);
               }}
-              placeholder="skills/release-notes"
-              required
+              placeholder="skills/release-notes (leave blank if at repository root)"
               className={auiInputClass('h-11')}
             />
+            <p className="mt-1.5 text-xs text-text-secondary">
+              Optional. Subfolder path within the repository. Leave blank if SKILL.md is at the repository root.
+            </p>
           </div>
 
           <div>
@@ -152,9 +165,11 @@ const ImportGithubSkillForm = ({ open, onOpenChange, onImport, busy = false, err
                 setRef(event.target.value);
               }}
               placeholder="main"
-              required
               className={auiInputClass('h-11')}
             />
+            <p className="mt-1.5 text-xs text-text-secondary">
+              Optional. Git branch, tag, or commit SHA. Defaults to main.
+            </p>
           </div>
 
           <div className="space-y-3">

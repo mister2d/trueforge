@@ -61,6 +61,38 @@ describe('skillCatalog mappers', () => {
     );
     assert.deepEqual(
       toHarnessManifest({
+        name: 'root-skill-dot',
+        description: 'Root skill',
+        repoURL: 'https://github.com/example/skills',
+        path: '.',
+        ref: 'main',
+      }),
+      {
+        type: 'git',
+        name: 'root-skill-dot',
+        description: 'Root skill',
+        url: 'https://github.com/example/skills',
+        ref: 'main',
+      },
+    );
+    assert.deepEqual(
+      toHarnessManifest({
+        name: 'root-skill-slash',
+        description: 'Root skill',
+        repoURL: 'https://github.com/example/skills',
+        path: './',
+        ref: '',
+      }),
+      {
+        type: 'git',
+        name: 'root-skill-slash',
+        description: 'Root skill',
+        url: 'https://github.com/example/skills',
+        ref: 'main',
+      },
+    );
+    assert.deepEqual(
+      toHarnessManifest({
         name: 'nested',
         description: 'Nested',
         repoURL: 'https://github.com/example/skills',

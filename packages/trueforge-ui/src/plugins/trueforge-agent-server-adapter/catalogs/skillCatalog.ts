@@ -24,14 +24,17 @@ export function toUiCatalogEntry(skill: TrueForgeApi.CatalogSkill): UiSkillCatal
 }
 
 export function toHarnessManifest(req: SkillConfigBase): TrueForgeApi.settings.CreateSkillRequest['manifest'] {
-  const path = req.path.trim();
+  const rawPath = req.path?.trim() ?? '';
+  const isRoot = rawPath === '' || rawPath === '.' || rawPath === '/' || rawPath === './';
+  const path = isRoot ? '' : rawPath.replace(/^\.?\/+/, '').replace(/\/+$/, '');
+  const ref = req.ref?.trim() || 'main';
   return {
     type: 'git',
-    name: req.name,
-    url: req.repoURL,
+    name: req.name.trim(),
+    url: req.repoURL.trim(),
     ...(path === '' ? {} : { path }),
-    ref: req.ref,
-    description: req.description,
+    ref,
+    description: req.description.trim(),
   };
 }
 

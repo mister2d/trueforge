@@ -164,11 +164,18 @@ class GitSkill(BaseModel):
         # Relative subpath within the repo. Reject absolute paths and ".." segments so it can't
         # escape the repo root. Leading/trailing slashes are stripped (repo root == ""). A leading
         # "-" is safe because subdirs are fed to `git sparse-checkout set` via stdin, never as args.
-        if v.startswith("/"):
+        trimmed = v.strip()
+        if trimmed in (".", "./", "/"):
+            return ""
+        if trimmed.startswith("/"):
             raise ValueError(f"git skill path must be relative: {v!r}")
-        stripped = v.strip("/")
+        stripped = trimmed.strip("/")
+        if stripped.startswith("./"):
+            stripped = stripped[2:].strip("/")
         if stripped and ".." in stripped.split("/"):
             raise ValueError(f"git skill path must not contain '..': {v!r}")
+        if stripped == ".":
+            return ""
         return stripped
 
 
@@ -551,6 +558,27 @@ class GitSkillSource(SkillSource):
         proc = self._run_git(["ls-remote", url, ref], cwd=cwd)
         oid = self._parse_ls_remote_object_id(proc.stdout or "")
         if oid is None:
+            fallbacks: list[str] = []
+            if ref.lower() == "main":
+                fallbacks.append("master")
+            elif ref.lower() == "master":
+                fallbacks.append("main")
+            if "HEAD" not in fallbacks and ref != "HEAD":
+                fallbacks.append("HEAD")
+
+            for alt_ref in fallbacks:
+                try:
+                    alt_proc = self._run_git(["ls-remote", url, alt_ref], cwd=cwd)
+                    alt_oid = self._parse_ls_remote_object_id(alt_proc.stdout or "")
+                    if alt_oid:
+                        print(
+                            f"WARNING: git ref {ref!r} not found for {url}, falling back to {alt_ref!r} ({alt_oid})",
+                            file=sys.stderr,
+                        )
+                        return alt_oid
+                except GitSkillError:
+                    continue
+
             raise GitSkillError(f"git ls-remote returned no commit for {url} ref {ref}")
         return oid
 
@@ -709,8 +737,9 @@ def run_skill_download() -> None:
         if loaded[skill_type] and sum(counts_by_source[skill_type]) < len(loaded[skill_type])
     ]
     if failed_parts:
-        sys.exit(
-            f"Failed to install {' and '.join(failed_parts)} skill(s); see warnings above.{suffix}"
+        print(
+            f"WARNING: Failed to install {' and '.join(failed_parts)} skill(s); see warnings above.{suffix}",
+            file=sys.stderr,
         )
 
     ensured = []

@@ -119,6 +119,28 @@ describe('skills routers', () => {
     });
   });
 
+  it('POST creates skills with root path ("." or empty or omitted)', async () => {
+    const rootBodyDot = {
+      ...putBody,
+      name: 'root-skill-dot',
+      path: '.',
+    };
+    const createdDot = await settingsRouter.request('/', postInit(wrapManifest(rootBodyDot)));
+    expect(createdDot.status).toBe(201);
+    const dotJson = (await createdDot.json()) as { data: { name: string; manifest: { path?: string } } };
+    expect(dotJson.data.manifest.path).toBeUndefined();
+
+    const rootBodyEmpty = {
+      ...putBody,
+      name: 'root-skill-empty',
+      path: '',
+    };
+    const createdEmpty = await settingsRouter.request('/', postInit(wrapManifest(rootBodyEmpty)));
+    expect(createdEmpty.status).toBe(201);
+    const emptyJson = (await createdEmpty.json()) as { data: { name: string; manifest: { path?: string } } };
+    expect(emptyJson.data.manifest.path).toBeUndefined();
+  });
+
   it('GET / maps registry rows with TrueFoundry metadata', async () => {
     const fqn = 'agent-skill:acme/team-a/echo:3';
     const now = '2026-01-01T00:00:00.000Z';

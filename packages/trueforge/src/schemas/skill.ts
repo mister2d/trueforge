@@ -31,11 +31,19 @@ export const SkillGitUrlSchema = z
 export const SkillGitPathSchema = z
   .string()
   .trim()
-  .min(1)
-  .regex(SKILL_PATH_REGEX, 'Path may only contain letters, numbers, ".", "_", "-", and "/"')
-  .refine(v => !hasParentTraversal(v), 'Path must not contain ".." segments')
-  .refine(v => !v.split('/').includes('.'), 'Path must not contain "." segments')
-  .refine(v => v.replace(/^\/+|\/+$/g, '').length > 0, 'Path must reference a subdirectory, not only slashes')
+  .transform(v => {
+    const stripped = v.replace(/^(\.\/|\.|\/)+/, '').replace(/\/+$/, '');
+    return stripped === '' ? undefined : stripped;
+  })
+  .refine(
+    v =>
+      v === undefined ||
+      (SKILL_PATH_REGEX.test(v) &&
+        !hasParentTraversal(v) &&
+        !v.split('/').includes('.') &&
+        v.replace(/^\/+|\/+$/g, '').length > 0),
+    'Path may only contain letters, numbers, ".", "_", "-", and "/" and must reference a subdirectory',
+  )
   .describe('Path to the skill directory within the repository. Omit to use the repository root.');
 
 /**
