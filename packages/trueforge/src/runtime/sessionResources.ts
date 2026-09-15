@@ -1,5 +1,6 @@
 import type { AgentSpec, SessionHandle } from '@truefoundry/trueforge-core/agent-session';
 import {
+  DirectSandboxProvider,
   Sandbox,
   SkillMounter,
   type AgentDefinition,
@@ -179,9 +180,10 @@ export async function getMcpConnection({
 }
 
 /**
- * Build a runtime SandboxProvider from the configured store row, or the
- * in-memory local fallback when standalone + the cached probe is supported.
- * Builds a fresh provider client per call (no network I/O).
+ * Build a runtime SandboxProvider: the configured store row wins; otherwise the
+ * direct provider when enabled (default) — scoped under the per-session
+ * segment; otherwise the in-memory local fallback when standalone + the cached
+ * probe is supported. Builds a fresh provider client per call (no network I/O).
  */
 /** Single path segment under the sandboxes parent (`_` when sessionId is missing or unsafe). */
 export function localSandboxSessionSegment(sessionId: string | undefined): string {
@@ -205,6 +207,13 @@ export async function resolveSandboxProvider({
   const record = await store.getSandboxProvider(tenant_id);
   if (record !== undefined) {
     return toSandboxProviderFromRecord({ record, tenant_id, logger });
+  }
+  if (configuration.DIRECT_SANDBOX_ENABLED) {
+    return new DirectSandboxProvider({
+      sandboxRootDir: join(configuration.DIRECT_SANDBOX_ROOT_DIR, localSandboxSessionSegment(sessionId)),
+      fileMaxBytesForDownload: configuration.SANDBOX_FILE_MAX_BYTES_FOR_DOWNLOAD,
+      logger,
+    });
   }
   if (!configuration.STANDALONE) {
     return undefined;
@@ -312,7 +321,7 @@ export async function validateAgentSpec({
   const hasSkills = requestedSkills.length > 0;
   if (wantsSandbox || hasSkills) {
     const record = await sandboxProviderStore.getSandboxProvider(tenant_id);
-    if (record === undefined && !isLocalSandboxFallbackEnabled()) {
+    if (record === undefined && !configuration.DIRECT_SANDBOX_ENABLED && !isLocalSandboxFallbackEnabled()) {
       throw new HTTPException(422, {
         message: hasSkills
           ? 'skills require a sandbox provider — configure via PUT /settings/sandbox-providers'

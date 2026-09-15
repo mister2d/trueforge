@@ -227,8 +227,8 @@ function createTurnResolver(deps: {
       });
       // A fresh Daytona sandbox is cloned from the release snapshot, so the build must be ready first.
       // Restoring an existing sandbox goes through daytona.get and never touches the snapshot.
-      // Local fallback has no image build.
-      if (carriedSandboxId === undefined && provider.type !== 'local') {
+      // Local and direct providers have no image build.
+      if (carriedSandboxId === undefined && provider.type === 'daytona') {
         const status = await checkSnapshotStatus({ store: sandboxProviderStore, tenant_id, logger });
         if (status?.status !== 'ready') {
           throw new HTTPException(422, {

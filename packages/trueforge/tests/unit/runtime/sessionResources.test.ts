@@ -5,7 +5,11 @@ import {
   type SessionAgent,
   type SessionHandle,
 } from '@truefoundry/trueforge-core/agent-session';
+import { DirectSandboxProvider } from '@truefoundry/trueforge-core/core';
 import { HTTPException } from 'hono/http-exception';
+import { mkdir } from 'node:fs/promises';
+import { createLogger } from 'winston';
+import configuration from '../../../src/config';
 import { validateGitAgentSkills } from '../../../src/db/gitSkillMounts';
 import { migrateSqliteToLatest } from '../../../src/db/migrateSqlite';
 import type { ISkillStore } from '../../../src/db/skillStore';
@@ -18,6 +22,7 @@ import {
   buildGatewayMetadata,
   getModelDetails,
   localSandboxSessionSegment,
+  resolveSandboxProvider,
   TFG_METADATA_PREFIX,
   validateAgentSpec,
   withGatewayMetadataHeaders,
@@ -260,25 +265,66 @@ describe('validateAgentSpec', () => {
     } satisfies Partial<HTTPException>);
   });
 
-  it('rejects sandbox.enabled when no sandbox provider is configured', async () => {
+  it('rejects sandbox.enabled when no sandbox provider is configured and the direct sandbox is disabled', async () => {
     const stores = await setup();
-    await expect(
-      validateAgentSpec({
-        spec: AgentSpecSchema.parse({
-          model: { name: 'test-provider/test-model' },
-          instructions: 'test',
-          config: { sandbox: { enabled: true } },
+    const directEnabled = configuration.DIRECT_SANDBOX_ENABLED;
+    configuration.DIRECT_SANDBOX_ENABLED = false;
+    try {
+      await expect(
+        validateAgentSpec({
+          spec: AgentSpecSchema.parse({
+            model: { name: 'test-provider/test-model' },
+            instructions: 'test',
+            config: { sandbox: { enabled: true } },
+          }),
+          tenant_id: 'default',
+          ...stores,
         }),
-        tenant_id: 'default',
-        ...stores,
-      }),
-    ).rejects.toMatchObject({
-      status: 422,
-      message: expect.stringContaining('PUT /settings/sandbox-providers'),
-    } satisfies Partial<HTTPException>);
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('PUT /settings/sandbox-providers'),
+      } satisfies Partial<HTTPException>);
+    } finally {
+      configuration.DIRECT_SANDBOX_ENABLED = directEnabled;
+    }
   });
 
-  it('rejects skills when no sandbox provider is configured', async () => {
+  it('rejects skills when no sandbox provider is configured and the direct sandbox is disabled', async () => {
+    const stores = await setup();
+    await stores.skillStore.upsertSkill({
+      tenant_id: 'default',
+      name: 'demo',
+      manifest: {
+        type: 'git',
+        name: 'demo',
+        url: 'https://github.com/example/skills',
+        ref: 'main',
+        description: 'demo skill',
+      },
+    });
+    const directEnabled = configuration.DIRECT_SANDBOX_ENABLED;
+    configuration.DIRECT_SANDBOX_ENABLED = false;
+    try {
+      await expect(
+        validateAgentSpec({
+          spec: AgentSpecSchema.parse({
+            model: { name: 'test-provider/test-model' },
+            instructions: 'test',
+            skills: [{ name: 'demo' }],
+          }),
+          tenant_id: 'default',
+          ...stores,
+        }),
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('skills require a sandbox provider'),
+      } satisfies Partial<HTTPException>);
+    } finally {
+      configuration.DIRECT_SANDBOX_ENABLED = directEnabled;
+    }
+  });
+
+  it('admits skills with no sandbox provider row (direct sandbox enabled by default)', async () => {
     const stores = await setup();
     await stores.skillStore.upsertSkill({
       tenant_id: 'default',
@@ -302,10 +348,23 @@ describe('validateAgentSpec', () => {
         tenant_id: 'default',
         ...stores,
       }),
-    ).rejects.toMatchObject({
-      status: 422,
-      message: expect.stringContaining('skills require a sandbox provider'),
-    } satisfies Partial<HTTPException>);
+    ).resolves.toBeUndefined();
+  });
+
+  it('admits sandbox.enabled with no sandbox provider row (direct sandbox enabled by default)', async () => {
+    const stores = await setup();
+
+    await expect(
+      validateAgentSpec({
+        spec: AgentSpecSchema.parse({
+          model: { name: 'test-provider/test-model' },
+          instructions: 'test',
+          config: { sandbox: { enabled: true } },
+        }),
+        tenant_id: 'default',
+        ...stores,
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('admits sandbox.enabled when a sandbox provider row exists', async () => {
@@ -477,5 +536,101 @@ describe('validateAgentSpec', () => {
       status: 422,
       message: 'Skill "echo": preload is not supported for git skills',
     });
+  });
+});
+
+describe('resolveSandboxProvider (direct default)', () => {
+  const logger = createLogger({ silent: true });
+
+  afterEach(() => {
+    setCachedLocalSandboxSupport(undefined);
+  });
+
+  async function makeStore() {
+    const db = createSqliteDb(':memory:');
+    await migrateSqliteToLatest(db);
+    return new SqliteSandboxProviderStore(db);
+  }
+
+  it('returns the direct provider when no row is stored (direct enabled by default)', async () => {
+    const store = await makeStore();
+    const provider = await resolveSandboxProvider({
+      tenant_id: 'default',
+      store,
+      logger,
+      sessionId: 'sess-1',
+    });
+    expect(provider).toBeInstanceOf(DirectSandboxProvider);
+    expect(provider?.type).toBe('direct');
+  });
+
+  it('returns the stored provider record when one exists', async () => {
+    const store = await makeStore();
+    await store.upsertSandboxProvider({
+      tenant_id: 'default',
+      manifest: {
+        type: 'daytona',
+        auth: { api_key: 'dtn-test' },
+        exec_timeout_ms: 60_000,
+        auto_stop_interval_in_minutes: 5,
+        auto_archive_interval_in_minutes: 60,
+        auto_delete_interval_in_minutes: 7200,
+      },
+      status: 'pending',
+      status_reason: 'Sandbox image build started.',
+      build_metadata: { build_ref: 'trueforge-build-029ea5ff', image_uri: 'tfy.jfrog.io/tfy-images/sandbox:029ea5ff' },
+    });
+    const provider = await resolveSandboxProvider({
+      tenant_id: 'default',
+      store,
+      logger,
+      sessionId: 'sess-1',
+    });
+    expect(provider?.type).toBe('daytona');
+  });
+
+  it('returns undefined when direct is disabled and the local fallback is unsupported', async () => {
+    const store = await makeStore();
+    const directEnabled = configuration.DIRECT_SANDBOX_ENABLED;
+    configuration.DIRECT_SANDBOX_ENABLED = false;
+    try {
+      const provider = await resolveSandboxProvider({
+        tenant_id: 'default',
+        store,
+        logger,
+        sessionId: 'sess-1',
+      });
+      expect(provider).toBeUndefined();
+    } finally {
+      configuration.DIRECT_SANDBOX_ENABLED = directEnabled;
+    }
+  });
+
+  it('returns the local provider when direct is disabled and the local fallback is supported', async () => {
+    const { LocalSandboxProvider } = await import('../../../src/sandbox/local/provider/LocalSandboxProvider');
+    const store = await makeStore();
+    // LocalSandboxProvider requires an existing Code Mode socket parent dir (standalone-only config field).
+    if (configuration.STANDALONE) {
+      await mkdir(configuration.CODE_MODE_SOCKET_PARENT, { recursive: true });
+    }
+    setCachedLocalSandboxSupport({
+      supported: true,
+      platform: 'linux',
+      shell: '/bin/sh',
+      python: '/usr/bin/python3',
+    });
+    const directEnabled = configuration.DIRECT_SANDBOX_ENABLED;
+    configuration.DIRECT_SANDBOX_ENABLED = false;
+    try {
+      const provider = await resolveSandboxProvider({
+        tenant_id: 'default',
+        store,
+        logger,
+        sessionId: 'sess-1',
+      });
+      expect(provider).toBeInstanceOf(LocalSandboxProvider);
+    } finally {
+      configuration.DIRECT_SANDBOX_ENABLED = directEnabled;
+    }
   });
 });

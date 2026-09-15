@@ -3,6 +3,7 @@ import { extractErrorLogFields } from '@truefoundry/trueforge-core/core';
 import type { Context } from 'hono';
 import type { Logger } from 'winston';
 import { hasAdminRole, type ResolveRequestContext } from '../auth/identity';
+import configuration from '../config';
 import type { ISandboxProviderStore } from '../db/sandboxProviderStore';
 import type { WithTransaction } from '../db/transaction';
 import { getCapabilitiesRoute } from '../routes/capabilityRoutes';
@@ -43,7 +44,10 @@ export function createCapabilitiesRouter<TTransaction>(deps: {
     } catch (error) {
       deps.logger.warn('Sandbox image status check failed; reporting sandbox disabled', extractErrorLogFields(error));
     }
-    const sandboxEnabled = status === 'ready' || (status === undefined && isLocalSandboxFallbackEnabled());
+    const sandboxEnabled =
+      status === 'ready' ||
+      configuration.DIRECT_SANDBOX_ENABLED ||
+      (status === undefined && isLocalSandboxFallbackEnabled());
     const settingsEnabled = hasAdminRole(requestContext);
     return c.json(
       {
