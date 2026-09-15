@@ -161,7 +161,11 @@ const LargeToolResponseSettingsSchema = z.object({
 
 const SandboxConfigSchema = z
   .object({
-    enabled: z.boolean().describe('Give the agent a sandbox. Required for skills and Code Mode.'),
+    enabled: z
+      .boolean()
+      .describe(
+        'Give the agent a sandbox for arbitrary code execution and Code Mode. Skills automatically provision execution when present.',
+      ),
     file_downloads: z
       .boolean()
       .default(true)

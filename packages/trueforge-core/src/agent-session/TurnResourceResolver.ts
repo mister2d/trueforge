@@ -27,7 +27,7 @@ export type TurnSandboxFactory = (input: {
 }) => Promise<Sandbox>;
 
 function specWantsSandbox(spec: AgentSpec): boolean {
-  return spec.config.sandbox.enabled;
+  return spec.config.sandbox.enabled || (spec.skills !== undefined && spec.skills.length > 0);
 }
 
 function toSelectors(entry: {
