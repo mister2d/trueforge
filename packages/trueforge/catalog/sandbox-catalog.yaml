@@ -2,6 +2,8 @@
 # GET /api/v1/catalog/sandbox-providers for the UI to copy into
 # PUT /api/v1/settings/sandbox-providers bodies. Discovery-only — never executed against.
 providers:
+  - type: direct
+    exec_timeout_ms: 60000
   - type: daytona
     exec_timeout_ms: 60000
     auto_stop_interval_in_minutes: 5

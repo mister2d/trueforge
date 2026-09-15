@@ -3,14 +3,11 @@
  * configured provider manifests in sandboxProvider.ts.
  */
 import { z } from '@hono/zod-openapi';
-import { DaytonaSandboxProviderSchema } from './sandboxProvider';
+import { DaytonaSandboxProviderSchema, DirectSandboxProviderSchema } from './sandboxProvider';
 
-/**
- * Catalog wire type. Single variant today (avoids one-member `oneOf` in OpenAPI).
- * Widen to a discriminated union when a second provider ships.
- */
-export const CatalogSandboxProviderSchema = DaytonaSandboxProviderSchema.omit({ auth: true })
-  .strict()
+/** Catalog wire type: Daytona (auth omitted — discovery presets carry no credentials) + Direct. */
+export const CatalogSandboxProviderSchema = z
+  .discriminatedUnion('type', [DaytonaSandboxProviderSchema.omit({ auth: true }).strict(), DirectSandboxProviderSchema])
   .openapi('CatalogSandboxProvider');
 
 export const SandboxCatalogFileSchema = z

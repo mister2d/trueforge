@@ -4,7 +4,7 @@
  *
  * Singleton per tenant — no identity `name` (unlike model providers / skills).
  *
- * Settings OpenAPI stays Daytona-only (`SandboxProviderManifest`), matching main.
+ * Settings OpenAPI exposes Daytona + Direct (`SandboxProviderManifest`).
  * Env-synthesized truefoundry records use `StoredSandboxProviderManifest` (store/runtime only).
  */
 import { z } from '@hono/zod-openapi';
@@ -48,7 +48,29 @@ export const DaytonaSandboxProviderSchema = z
       .describe('Minutes before Daytona auto-deletes the sandbox (0 disables).'),
   })
   .strict();
-export const SandboxProviderManifestSchema = DaytonaSandboxProviderSchema.openapi('SandboxProviderManifest');
+
+/**
+ * Direct host-execution provider config. Zero external dependencies: exec runs
+ * in the host environment (the microVM is the boundary). No auth (there is no
+ * external service), so the manifest is a flat timeout setting.
+ */
+export const DirectSandboxProviderSchema = z
+  .object({
+    type: z.literal('direct').describe('Direct host microVM sandbox provider.'),
+    exec_timeout_ms: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .default(60000)
+      .describe('Default sandbox command exec timeout in milliseconds.'),
+  })
+  .strict()
+  .openapi('DirectSandboxProvider');
+
+export const SandboxProviderManifestSchema = z
+  .discriminatedUnion('type', [DaytonaSandboxProviderSchema, DirectSandboxProviderSchema])
+  .openapi('SandboxProviderManifest');
 
 /**
  * TrueFoundry (on-prem) sandbox config — env-synthesized store records only.
@@ -64,11 +86,12 @@ export const TrueFoundrySandboxProviderSchema = z
   .strict();
 
 /**
- * Store / runtime jsonb: Daytona settings rows plus env-synthesized truefoundry.
+ * Store / runtime jsonb: Daytona + Direct settings rows plus env-synthesized truefoundry.
  * Not an OpenAPI component.
  */
 export const StoredSandboxProviderManifestSchema = z.discriminatedUnion('type', [
   DaytonaSandboxProviderSchema,
+  DirectSandboxProviderSchema,
   TrueFoundrySandboxProviderSchema,
 ]);
 
@@ -130,7 +153,7 @@ export type ConfiguredSandboxProvider = z.infer<typeof ConfiguredSandboxProvider
 export type UpdateSandboxProviderRequest = z.infer<typeof UpdateSandboxProviderRequestSchema>;
 
 /** Wire/persisted snake_case → Daytona client credentials + provider settings. */
-export function toDaytonaSandboxProviderInput(manifest: SandboxProviderManifest): {
+export function toDaytonaSandboxProviderInput(manifest: DaytonaSandboxProvider): {
   apiKey: string;
 } & Pick<
   DaytonaSandboxProviderOptions,
