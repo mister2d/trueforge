@@ -53,7 +53,7 @@ export function toUiSkill(skill: TrueForgeApi.ConfiguredSkill, catalogNames: Rea
   return base;
 }
 
-/** Settings skill-catalog port for `createTrueFoundryServer`. Delete omitted (no BE route). */
+/** Settings skill-catalog port for `createTrueFoundryServer`. */
 export function createSkillCatalog(client: TrueForge): SkillCatalogServer<UiSkill> {
   return {
     getSkillCatalog: async () => {
@@ -88,6 +88,9 @@ export function createSkillCatalog(client: TrueForge): SkillCatalogServer<UiSkil
         name: body.data.name,
         description: body.data.manifest.description,
       };
+    },
+    deleteSkill: async ({ id }) => {
+      await client.settings.skills.delete(id);
     },
   };
 }

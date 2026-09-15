@@ -8,11 +8,13 @@ import { createRoute } from '@hono/zod-openapi';
 import { RequestErrorResponseSchema } from '../schemas/errors';
 import {
   CreateSkillRequestSchema,
+  DeleteSkillResponseSchema,
   GetSkillResponseSchema,
   ListAvailableSkillsResponseSchema,
   ListSkillVersionsRequestQuerySchema,
   ListSkillVersionsResponseSchema,
   ListSkillsResponseSchema,
+  SkillNameParamsSchema,
   UpdateSkillRequestSchema,
 } from '../schemas/skill';
 import { OpenApiTag } from './openapiTags';
@@ -142,6 +144,45 @@ export const putSkillRoute = createRoute({
     400: {
       content: { 'application/json': { schema: RequestErrorResponseSchema } },
       description: 'Invalid request body.',
+    },
+    424: {
+      content: { 'application/json': { schema: RequestErrorResponseSchema } },
+      description: 'Unsupported because skills are managed by an external system.',
+    },
+  },
+});
+
+export const deleteSkillRoute = createRoute({
+  method: 'delete',
+  path: '/{name}',
+  tags: [OpenApiTag.SKILLS],
+  summary: 'Delete a skill',
+  description: 'Delete a configured skill by name.',
+  'x-fern-sdk-group-name': ['settings', 'skills'],
+  'x-fern-sdk-method-name': 'delete',
+  request: {
+    params: SkillNameParamsSchema,
+  },
+  responses: {
+    200: {
+      content: { 'application/json': { schema: DeleteSkillResponseSchema } },
+      description: 'Skill deleted.',
+    },
+    400: {
+      content: { 'application/json': { schema: RequestErrorResponseSchema } },
+      description: 'Invalid parameter.',
+    },
+    401: {
+      content: { 'application/json': { schema: RequestErrorResponseSchema } },
+      description: 'OIDC is configured and the request has no valid session cookie.',
+    },
+    403: {
+      content: { 'application/json': { schema: RequestErrorResponseSchema } },
+      description: 'OIDC is configured and the caller is authenticated but not an admin.',
+    },
+    404: {
+      content: { 'application/json': { schema: RequestErrorResponseSchema } },
+      description: 'Skill not found.',
     },
     424: {
       content: { 'application/json': { schema: RequestErrorResponseSchema } },

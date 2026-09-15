@@ -173,8 +173,17 @@ export const ListSkillVersionsResponseSchema = z
   .object({ data: z.array(SkillVersionSchema) })
   .openapi('ListSkillVersionsResponse');
 
+export const SkillNameParamsSchema = z
+  .object({
+    name: z.string().min(1).describe('Skill name.'),
+  })
+  .openapi('SkillNameParams');
+
+export const DeleteSkillResponseSchema = z.object({}).openapi('DeleteSkillResponse');
+
 export type ConfiguredSkill = z.infer<typeof ConfiguredSkillSchema>;
 export type CreateSkillRequest = z.infer<typeof CreateSkillRequestSchema>;
 export type UpdateSkillRequest = z.infer<typeof UpdateSkillRequestSchema>;
 export type AvailableSkill = z.infer<typeof AvailableSkillSchema>;
 export type SkillVersion = z.infer<typeof SkillVersionSchema>;
+export type DeleteSkillResponse = z.infer<typeof DeleteSkillResponseSchema>;

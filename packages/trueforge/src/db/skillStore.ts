@@ -55,12 +55,19 @@ export class SkillNameConflictError extends Error {
   }
 }
 
+export interface DeleteSkillInput {
+  tenant_id: string;
+  name: string;
+}
+
 export interface ISkillStore<TTransaction = never> {
   listSkills(input: ListSkillsInput, transaction?: TTransaction): Promise<SkillRecord[]>;
   /** Inserts a new skill. Throws SkillNameConflictError on name clash. */
   createSkill(input: CreateSkillInput, transaction?: TTransaction): Promise<SkillRecord>;
   /** Single-row write: creates the skill or replaces the whole manifest. */
   upsertSkill(input: UpsertSkillInput, transaction?: TTransaction): Promise<SkillRecord>;
+  /** Deletes a skill by name. Returns true if a record was deleted, false if not found. */
+  deleteSkill(input: DeleteSkillInput, transaction?: TTransaction): Promise<boolean>;
   listSkillVersions(input: { name: string }): Promise<SkillVersion[]>;
   /** Admit AgentSpec skill refs (git store or TrueFoundry SFY resolve with caller token). */
   validateAgentSkills(input: AgentSkillsInput, transaction?: TTransaction): Promise<void>;

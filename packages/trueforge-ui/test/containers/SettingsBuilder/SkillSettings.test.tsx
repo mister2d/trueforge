@@ -82,7 +82,7 @@ describe('SkillSettings', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Enable Code Review' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Remove Code Review' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Disable Code Review' })).toBeTruthy();
     });
     expect(screen.queryByRole('button', { name: 'Enable Code Review' })).toBeNull();
     expect(host.created).toEqual([
@@ -97,7 +97,7 @@ describe('SkillSettings', () => {
     ]);
   });
 
-  it('returns a removed registry skill to Available', async () => {
+  it('returns a disabled registry skill to Available', async () => {
     const { wrapper: Wrapper } = createFakeHost([
       {
         id: 'db-cat-code-review',
@@ -113,14 +113,14 @@ describe('SkillSettings', () => {
       </Wrapper>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove Code Review' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Disable Code Review' }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Enable Code Review' })).toBeTruthy();
     });
   });
 
-  it('removes an imported github skill entirely', async () => {
+  it('deletes an imported github skill after confirmation', async () => {
     const host = createFakeHost([
       {
         id: 'db-house-style',
@@ -136,12 +136,46 @@ describe('SkillSettings', () => {
       </Wrapper>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove House Style' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete House Style' }));
+
+    expect(await screen.findByRole('heading', { name: 'Delete skill' })).toBeTruthy();
+    expect(screen.getByText(/Are you sure you want to delete/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {
       expect(screen.queryByText('House Style')).toBeNull();
     });
     expect(host.getDefined()).toEqual([]);
+  });
+
+  it('cancels deletion of an imported github skill', async () => {
+    const host = createFakeHost([
+      {
+        id: 'db-house-style',
+        name: 'House Style',
+        description: 'Writing rules and tone-of-voice for external copy.',
+      },
+    ]);
+    const { wrapper: Wrapper } = host;
+
+    render(
+      <Wrapper>
+        <SkillSettings />
+      </Wrapper>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete House Style' }));
+
+    expect(await screen.findByRole('heading', { name: 'Delete skill' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Delete skill' })).toBeNull();
+    });
+    expect(screen.getByText('House Style')).toBeTruthy();
+    expect(host.getDefined()).toHaveLength(1);
   });
 
   it('imports a github skill without a type discriminant', async () => {

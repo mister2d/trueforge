@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'vitest';
 
 import {
+  createSkillCatalog,
   toHarnessManifest,
   toUiCatalogEntry,
   toUiSkill,
@@ -155,5 +156,23 @@ describe('skillCatalog mappers', () => {
         description: 'House style',
       },
     );
+  });
+});
+
+describe('createSkillCatalog', () => {
+  it('deleteSkill invokes client.settings.skills.delete', async () => {
+    let deletedName: string | undefined;
+    const client = {
+      settings: {
+        skills: {
+          delete: async (name: string) => {
+            deletedName = name;
+          },
+        },
+      },
+    } as unknown as Parameters<typeof createSkillCatalog>[0];
+    const catalog = createSkillCatalog(client);
+    await catalog.deleteSkill!({ id: 'test-skill' });
+    assert.equal(deletedName, 'test-skill');
   });
 });

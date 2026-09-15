@@ -210,6 +210,7 @@ describe('skills routers', () => {
       listSkills: jest.fn(),
       createSkill: jest.fn().mockResolvedValue(record),
       upsertSkill: jest.fn().mockResolvedValue(record),
+      deleteSkill: jest.fn(),
       listSkillVersions: jest.fn(),
       validateAgentSkills: jest.fn(),
       resolveTurnSkills: jest.fn(),
@@ -236,7 +237,7 @@ describe('skills routers', () => {
     });
   });
 
-  it('settings create/put return 424 when the skill store is TrueFoundry-managed', async () => {
+  it('settings create/put/delete return 424 when the skill store is TrueFoundry-managed', async () => {
     const registryManifest = {
       type: 'truefoundry' as const,
       name: 'agent-skill:acme/team-a/echo:3',
@@ -249,6 +250,7 @@ describe('skills routers', () => {
       listSkills: jest.fn(),
       createSkill: jest.fn(() => trueFoundryManaged()),
       upsertSkill: jest.fn(() => trueFoundryManaged()),
+      deleteSkill: jest.fn(() => trueFoundryManaged()),
       listSkillVersions: jest.fn(),
       validateAgentSkills: jest.fn(),
       resolveTurnSkills: jest.fn(),
@@ -266,6 +268,28 @@ describe('skills routers', () => {
     const put = await router.request('/', putInit(wrapManifest(registryManifest)));
     expect(put.status).toBe(424);
     expect(await put.text()).toBe(TRUEFOUNDRY_MANAGED_MESSAGE);
+
+    const del = await router.request('/agent-skill%3Aacme%2Fteam-a%2Fecho%3A3', { method: 'DELETE' });
+    expect(del.status).toBe(424);
+    expect(await del.text()).toBe(TRUEFOUNDRY_MANAGED_MESSAGE);
+  });
+
+  it('DELETE /:name deletes a skill and returns 200, 404 if not found', async () => {
+    const notFound = await settingsRouter.request('/non-existent', { method: 'DELETE' });
+    expect(notFound.status).toBe(404);
+    expect(await notFound.json()).toEqual({
+      error: { message: 'Skill not found: non-existent' },
+    });
+
+    const deleted = await settingsRouter.request(`/${putBody.name}`, { method: 'DELETE' });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({});
+
+    // Verify it is no longer returned in list
+    const list = await settingsRouter.request('/');
+    expect(list.status).toBe(200);
+    const body = (await list.json()) as { data: { name: string }[] };
+    expect(body.data.find(s => s.name === putBody.name)).toBeUndefined();
   });
 
   it('PUT rejects invalid bodies at the Zod layer', async () => {

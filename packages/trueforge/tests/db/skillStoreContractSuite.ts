@@ -203,4 +203,36 @@ export function runSkillStoreContractSuite(getStore: () => ISkillStore): void {
       message: 'Skill "algorithmic-art": preload is not supported for git skills',
     });
   });
+
+  it('deleteSkill removes an existing skill and returns true', async () => {
+    const store = getStore();
+    await store.upsertSkill({ tenant_id: TENANT, name: 'algorithmic-art', manifest: manifest() });
+
+    const deleted = await store.deleteSkill({ tenant_id: TENANT, name: 'algorithmic-art' });
+    expect(deleted).toBe(true);
+
+    const skills = await store.listSkills({ tenant_id: TENANT, names: undefined });
+    expect(skills).toEqual([]);
+  });
+
+  it('deleteSkill returns false when skill does not exist', async () => {
+    const store = getStore();
+    const deleted = await store.deleteSkill({ tenant_id: TENANT, name: 'non-existent' });
+    expect(deleted).toBe(false);
+  });
+
+  it('deleteSkill respects tenant isolation', async () => {
+    const store = getStore();
+    await store.upsertSkill({ tenant_id: TENANT, name: 'algorithmic-art', manifest: manifest() });
+    await store.upsertSkill({ tenant_id: 'other-tenant', name: 'algorithmic-art', manifest: manifest() });
+
+    const deleted = await store.deleteSkill({ tenant_id: TENANT, name: 'algorithmic-art' });
+    expect(deleted).toBe(true);
+
+    const tenantSkills = await store.listSkills({ tenant_id: TENANT, names: undefined });
+    expect(tenantSkills).toEqual([]);
+
+    const otherSkills = await store.listSkills({ tenant_id: 'other-tenant', names: undefined });
+    expect(otherSkills.map(s => s.name)).toEqual(['algorithmic-art']);
+  });
 }

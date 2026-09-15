@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@/atoms/primitives/Button.js';
+import { CenteredModal } from '@/atoms/primitives/CenteredModal.js';
 import SearchInput from '@/atoms/primitives/SearchInput.js';
 import { Icon } from '@/icons/Icon.js';
 import { useCatalogServer } from '../../server/ServerContext.js';
@@ -33,6 +34,8 @@ const SkillSettings = () => {
   const [busy, setBusy] = useState(false);
   const [managedExternally, setManagedExternally] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [skillPendingDelete, setSkillPendingDelete] = useState<SkillBase | null>(null);
+  const [deleteModalError, setDeleteModalError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!skillCatalog) return;
@@ -99,12 +102,35 @@ const SkillSettings = () => {
     }).catch(() => {});
   };
 
-  const handleRemove = (skill: SkillBase) => {
+  const handleDisable = (skill: SkillBase) => {
     const deleteSkill = skillCatalog.deleteSkill;
     if (!deleteSkill) return;
     void runMutation(async () => {
       await deleteSkill({ id: skill.id });
-    }).catch(() => {});
+    })
+      .then(() => {
+        setTimeout(() => {
+          toaster?.showSuccess({ title: `${skill.name} disabled` });
+        }, 0);
+      })
+      .catch(() => {});
+  };
+
+  const handleDeleteConfirm = async (skill: SkillBase) => {
+    const deleteSkill = skillCatalog.deleteSkill;
+    if (!deleteSkill) return;
+    setDeleteModalError(null);
+    try {
+      await runMutation(async () => {
+        await deleteSkill({ id: skill.id });
+      }, setDeleteModalError);
+      setSkillPendingDelete(null);
+      setTimeout(() => {
+        toaster?.showSuccess({ title: `${skill.name} deleted` });
+      }, 0);
+    } catch {
+      // runMutation sets deleteModalError
+    }
   };
 
   const handleImport = async (draft: SkillConfigBase) => {
@@ -195,17 +221,32 @@ const SkillSettings = () => {
                     name: skill.name,
                     description: skill.description,
                     action: skillCatalog.deleteSkill ? (
-                      <Button.Secondary
-                        size="small"
-                        type="button"
-                        disabled={busy || managedExternally}
-                        aria-label={`Remove ${skill.name}`}
-                        onClick={() => {
-                          handleRemove(skill);
-                        }}
-                      >
-                        Remove
-                      </Button.Secondary>
+                      isRegistrySkill(skill) ? (
+                        <Button.Secondary
+                          size="small"
+                          type="button"
+                          disabled={busy || managedExternally}
+                          aria-label={`Disable ${skill.name}`}
+                          onClick={() => {
+                            handleDisable(skill);
+                          }}
+                        >
+                          Disable
+                        </Button.Secondary>
+                      ) : (
+                        <Button.Secondary
+                          size="small"
+                          type="button"
+                          disabled={busy || managedExternally}
+                          aria-label={`Delete ${skill.name}`}
+                          onClick={() => {
+                            setDeleteModalError(null);
+                            setSkillPendingDelete(skill);
+                          }}
+                        >
+                          Delete
+                        </Button.Secondary>
+                      )
                     ) : null,
                   }),
                 )}
@@ -264,6 +305,55 @@ const SkillSettings = () => {
         busy={busy || managedExternally}
         error={formError}
       />
+
+      <CenteredModal
+        open={skillPendingDelete !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setSkillPendingDelete(null);
+            setDeleteModalError(null);
+          }
+        }}
+        title="Delete skill"
+        contentSized
+        className="md:max-w-md"
+      >
+        <div className="space-y-3 px-5 py-4">
+          <p className="text-sm text-text-secondary">
+            Are you sure you want to delete{' '}
+            <strong className="font-semibold text-text-primary">{skillPendingDelete?.name}</strong>? This cannot be
+            undone.
+          </p>
+          {deleteModalError ? (
+            <p className="rounded-md border border-failure-bg/30 bg-failure-bg/10 px-3 py-2 text-sm text-failure-bg">
+              {deleteModalError}
+            </p>
+          ) : null}
+        </div>
+        <footer className="flex justify-end gap-2 border-t border-border px-5 py-3">
+          <Button.Ghost
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setSkillPendingDelete(null);
+              setDeleteModalError(null);
+            }}
+          >
+            Cancel
+          </Button.Ghost>
+          <Button.Destructive
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (skillPendingDelete) {
+                void handleDeleteConfirm(skillPendingDelete);
+              }
+            }}
+          >
+            Delete
+          </Button.Destructive>
+        </footer>
+      </CenteredModal>
     </>
   );
 };
