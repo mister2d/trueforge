@@ -27,6 +27,9 @@ function displayNameForType(type: string): string {
   if (type === DAYTONA_TYPE) {
     return DAYTONA_DISPLAY_NAME;
   }
+  if (type === 'direct') {
+    return 'Direct';
+  }
   return type;
 }
 
@@ -34,10 +37,10 @@ export function configFromHarness(
   provider: TrueForgeApi.CatalogSandboxProvider | TrueForgeApi.SandboxProviderManifest,
 ): SandboxProviderConfig {
   return {
-    execTimeoutMs: provider.execTimeoutMs,
-    autoStopIntervalInMinutes: provider.autoStopIntervalInMinutes,
-    autoArchiveIntervalInMinutes: provider.autoArchiveIntervalInMinutes,
-    autoDeleteIntervalInMinutes: provider.autoDeleteIntervalInMinutes,
+    execTimeoutMs: provider.execTimeoutMs ?? 60000,
+    autoStopIntervalInMinutes: provider.autoStopIntervalInMinutes ?? 0,
+    autoArchiveIntervalInMinutes: provider.autoArchiveIntervalInMinutes ?? 0,
+    autoDeleteIntervalInMinutes: provider.autoDeleteIntervalInMinutes ?? 0,
   };
 }
 
@@ -93,20 +96,26 @@ export function filterUiSandboxProviders({
 export function toHarnessManifest(
   req: {
     type: string;
-    apiKey: string;
-  } & SandboxProviderConfig,
+    apiKey?: string;
+  } & Partial<SandboxProviderConfig>,
 ): TrueForgeApi.SandboxProviderManifest {
+  if (req.type === 'direct') {
+    return {
+      type: 'direct',
+      execTimeoutMs: req.execTimeoutMs ?? 60000,
+    } as unknown as TrueForgeApi.SandboxProviderManifest;
+  }
   if (req.type !== DAYTONA_TYPE) {
     throw new Error(`Unsupported sandbox provider type: ${req.type}`);
   }
   return {
     type: DAYTONA_TYPE,
-    execTimeoutMs: req.execTimeoutMs,
-    autoStopIntervalInMinutes: req.autoStopIntervalInMinutes,
-    autoArchiveIntervalInMinutes: req.autoArchiveIntervalInMinutes,
-    autoDeleteIntervalInMinutes: req.autoDeleteIntervalInMinutes,
-    auth: { apiKey: req.apiKey },
-  };
+    execTimeoutMs: req.execTimeoutMs ?? 60000,
+    autoStopIntervalInMinutes: req.autoStopIntervalInMinutes ?? 5,
+    autoArchiveIntervalInMinutes: req.autoArchiveIntervalInMinutes ?? 60,
+    autoDeleteIntervalInMinutes: req.autoDeleteIntervalInMinutes ?? 7200,
+    auth: { apiKey: req.apiKey ?? '' },
+  } as unknown as TrueForgeApi.SandboxProviderManifest;
 }
 
 /** Settings sandbox-catalog port for `createTrueFoundryServer`. Delete omitted (no BE route). */
@@ -117,7 +126,7 @@ export function createSandboxProviderCatalog(client: TrueForge): SandboxCatalogS
       return trimmed;
     }
     const existing = await client.settings.sandboxProviders.get();
-    return existing.data.manifest.auth.apiKey;
+    return existing.data.manifest.auth?.apiKey ?? '';
   }
 
   return {
@@ -153,10 +162,14 @@ export function createSandboxProviderCatalog(client: TrueForge): SandboxCatalogS
       return toUiSandboxProvider(body.data.manifest);
     },
     updateSandboxProvider: async req => {
-      const apiKey = await resolveApiKey(req.apiKey);
+      let apiKey: string | undefined;
+      const type = req.id ?? DAYTONA_TYPE;
+      if (type === DAYTONA_TYPE) {
+        apiKey = await resolveApiKey(req.apiKey);
+      }
       const body = await client.settings.sandboxProviders.createOrUpdate({
         manifest: toHarnessManifest({
-          type: DAYTONA_TYPE,
+          type,
           apiKey,
           execTimeoutMs: req.execTimeoutMs,
           autoStopIntervalInMinutes: req.autoStopIntervalInMinutes,

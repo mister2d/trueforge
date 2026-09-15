@@ -9,30 +9,30 @@ export const SandboxProviderManifest: core.serialization.ObjectSchema<
     serializers.SandboxProviderManifest.Raw,
     TrueForge.SandboxProviderManifest
 > = core.serialization.object({
-    auth: DaytonaSandboxProviderAuth,
+    auth: DaytonaSandboxProviderAuth.optional(),
     autoArchiveIntervalInMinutes: core.serialization.property(
         "auto_archive_interval_in_minutes",
-        core.serialization.number(),
+        core.serialization.number().optional(),
     ),
     autoDeleteIntervalInMinutes: core.serialization.property(
         "auto_delete_interval_in_minutes",
-        core.serialization.number(),
+        core.serialization.number().optional(),
     ),
     autoStopIntervalInMinutes: core.serialization.property(
         "auto_stop_interval_in_minutes",
-        core.serialization.number(),
+        core.serialization.number().optional(),
     ),
     execTimeoutMs: core.serialization.property("exec_timeout_ms", core.serialization.number()),
-    type: core.serialization.stringLiteral("daytona"),
+    type: core.serialization.string(),
 });
 
 export declare namespace SandboxProviderManifest {
     export interface Raw {
-        auth: DaytonaSandboxProviderAuth.Raw;
-        auto_archive_interval_in_minutes: number;
-        auto_delete_interval_in_minutes: number;
-        auto_stop_interval_in_minutes: number;
+        auth?: DaytonaSandboxProviderAuth.Raw | null;
+        auto_archive_interval_in_minutes?: number | null;
+        auto_delete_interval_in_minutes?: number | null;
+        auto_stop_interval_in_minutes?: number | null;
         exec_timeout_ms: number;
-        type: "daytona";
+        type: string;
     }
 }

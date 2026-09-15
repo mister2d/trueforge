@@ -10,26 +10,26 @@ export const CatalogSandboxProvider: core.serialization.ObjectSchema<
 > = core.serialization.object({
     autoArchiveIntervalInMinutes: core.serialization.property(
         "auto_archive_interval_in_minutes",
-        core.serialization.number(),
+        core.serialization.number().optional(),
     ),
     autoDeleteIntervalInMinutes: core.serialization.property(
         "auto_delete_interval_in_minutes",
-        core.serialization.number(),
+        core.serialization.number().optional(),
     ),
     autoStopIntervalInMinutes: core.serialization.property(
         "auto_stop_interval_in_minutes",
-        core.serialization.number(),
+        core.serialization.number().optional(),
     ),
     execTimeoutMs: core.serialization.property("exec_timeout_ms", core.serialization.number()),
-    type: core.serialization.stringLiteral("daytona"),
+    type: core.serialization.string(),
 });
 
 export declare namespace CatalogSandboxProvider {
     export interface Raw {
-        auto_archive_interval_in_minutes: number;
-        auto_delete_interval_in_minutes: number;
-        auto_stop_interval_in_minutes: number;
+        auto_archive_interval_in_minutes?: number | null;
+        auto_delete_interval_in_minutes?: number | null;
+        auto_stop_interval_in_minutes?: number | null;
         exec_timeout_ms: number;
-        type: "daytona";
+        type: string;
     }
 }

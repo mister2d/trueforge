@@ -24,6 +24,8 @@ type ConfigureSandboxFormProps = {
   initialConfig?: SandboxProviderConfig | null;
   /** When false (updates), empty apiKey means keep the existing key. */
   requireApiKey?: boolean;
+  /** When false (e.g. direct sandbox), apiKey field is hidden. */
+  showApiKey?: boolean;
   busy?: boolean;
   error?: string | null;
 };
@@ -54,6 +56,7 @@ const ConfigureSandboxForm = ({
   description,
   initialConfig = null,
   requireApiKey = true,
+  showApiKey = true,
   busy = false,
   error,
 }: ConfigureSandboxFormProps) => {
@@ -96,7 +99,7 @@ const ConfigureSandboxForm = ({
   const trimmedKey = apiKey.trim();
 
   const isValid =
-    (!requireApiKey || !!trimmedKey) &&
+    (!showApiKey || !requireApiKey || !!trimmedKey) &&
     execTimeout != null &&
     autoStop != null &&
     autoArchive != null &&
@@ -142,24 +145,26 @@ const ConfigureSandboxForm = ({
     >
       <form className="flex flex-col overflow-y-auto p-5 md:p-6" onSubmit={handleSubmit}>
         <div className="space-y-4">
-          <div>
-            <label htmlFor="sandbox-api-key" className="mb-1.5 block text-sm font-medium text-text-primary">
-              API key
-              {!requireApiKey ? <span className="font-normal text-text-secondary"> (optional)</span> : null}
-            </label>
-            <input
-              id="sandbox-api-key"
-              type="password"
-              required={requireApiKey}
-              value={apiKey}
-              onChange={event => {
-                setApiKey(event.target.value);
-              }}
-              placeholder={requireApiKey ? 'dtn_...' : 'Leave blank to keep existing'}
-              autoFocus
-              className={inputClassName}
-            />
-          </div>
+          {showApiKey ? (
+            <div>
+              <label htmlFor="sandbox-api-key" className="mb-1.5 block text-sm font-medium text-text-primary">
+                API key
+                {!requireApiKey ? <span className="font-normal text-text-secondary"> (optional)</span> : null}
+              </label>
+              <input
+                id="sandbox-api-key"
+                type="password"
+                required={requireApiKey}
+                value={apiKey}
+                onChange={event => {
+                  setApiKey(event.target.value);
+                }}
+                placeholder={requireApiKey ? 'dtn_...' : 'Leave blank to keep existing'}
+                autoFocus
+                className={inputClassName}
+              />
+            </div>
+          ) : null}
 
           <Accordion
             expanded={advancedOpen}
