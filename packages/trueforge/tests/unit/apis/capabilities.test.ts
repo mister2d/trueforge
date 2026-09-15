@@ -12,7 +12,7 @@ import { createAuthMiddleware } from '../../../src/auth/middleware';
 import { disableOidcAuth, enableOidcAuth, initOidc } from '../../../src/auth/oidc';
 import { OidcAuthenticator } from '../../../src/auth/oidcAuthenticator';
 import { StandaloneAuthenticator } from '../../../src/auth/standaloneAuthenticator';
-import type { OIDCConfig } from '../../../src/config';
+import configuration, { type OIDCConfig } from '../../../src/config';
 import { migrateSqliteToLatest } from '../../../src/db/migrateSqlite';
 import { createSqliteDb } from '../../../src/db/sqlite/client';
 import { SqliteSandboxProviderStore } from '../../../src/db/sqlite/sandbox-provider-store/SqliteSandboxProviderStore';
@@ -82,20 +82,18 @@ describe('capabilities routers', () => {
     );
   }
 
-  it('reports sandbox + skill disabled when no image status is available', async () => {
+  it('reports sandbox + skill enabled by default when no provider row exists and no local fallback is cached', async () => {
     disableOidcAuth();
     mockStatus.mockResolvedValue(undefined);
+    setCachedLocalSandboxSupport(undefined);
     const router = makeRouter();
 
     const response = await router.request('/');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       data: {
-        sandbox: { enabled: false },
-        skill: {
-          enabled: false,
-          reason: 'Skills run in a sandbox, which is not configured.',
-        },
+        sandbox: { enabled: true },
+        skill: { enabled: true },
         settings: { enabled: true },
       },
     });
@@ -139,47 +137,67 @@ describe('capabilities routers', () => {
     });
   });
 
-  it('reports sandbox disabled with a "being prepared" skill reason while the image is still pending', async () => {
+  // The status-driven reasons only apply when the direct sandbox is disabled
+  // (it is enabled by default and short-circuits the image status).
+  it('reports sandbox disabled with a "being prepared" skill reason while the image is still pending (direct disabled)', async () => {
     disableOidcAuth();
     mockStatus.mockResolvedValue(buildWithStatus('pending'));
-    const router = makeRouter();
+    const directEnabled = configuration.DIRECT_SANDBOX_ENABLED;
+    configuration.DIRECT_SANDBOX_ENABLED = false;
+    try {
+      const router = makeRouter();
 
-    const response = await router.request('/');
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      data: {
-        sandbox: { enabled: false },
-        skill: {
-          enabled: false,
-          reason: 'Skills run in a sandbox whose image is still being prepared — retry shortly.',
+      const response = await router.request('/');
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        data: {
+          sandbox: { enabled: false },
+          skill: {
+            enabled: false,
+            reason: 'Skills run in a sandbox whose image is still being prepared — retry shortly.',
+          },
         },
-      },
-    });
+      });
+    } finally {
+      configuration.DIRECT_SANDBOX_ENABLED = directEnabled;
+    }
   });
 
-  it('reports "not configured" skill reason when the image build failed', async () => {
+  it('reports "not configured" skill reason when the image build failed (direct disabled)', async () => {
     disableOidcAuth();
     mockStatus.mockResolvedValue(buildWithStatus('failed'));
-    const router = makeRouter();
+    const directEnabled = configuration.DIRECT_SANDBOX_ENABLED;
+    configuration.DIRECT_SANDBOX_ENABLED = false;
+    try {
+      const router = makeRouter();
 
-    const response = await router.request('/');
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      data: {
-        sandbox: { enabled: false },
-        skill: { enabled: false, reason: 'Skills run in a sandbox, which is not configured.' },
-      },
-    });
+      const response = await router.request('/');
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        data: {
+          sandbox: { enabled: false },
+          skill: { enabled: false, reason: 'Skills run in a sandbox, which is not configured.' },
+        },
+      });
+    } finally {
+      configuration.DIRECT_SANDBOX_ENABLED = directEnabled;
+    }
   });
 
-  it('fails closed (sandbox disabled) when the status check throws', async () => {
+  it('fails closed (sandbox disabled) when the status check throws (direct disabled)', async () => {
     disableOidcAuth();
     mockStatus.mockRejectedValue(new Error('daytona unreachable'));
-    const router = makeRouter();
+    const directEnabled = configuration.DIRECT_SANDBOX_ENABLED;
+    configuration.DIRECT_SANDBOX_ENABLED = false;
+    try {
+      const router = makeRouter();
 
-    const response = await router.request('/');
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ data: { sandbox: { enabled: false } } });
+      const response = await router.request('/');
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ data: { sandbox: { enabled: false } } });
+    } finally {
+      configuration.DIRECT_SANDBOX_ENABLED = directEnabled;
+    }
   });
 
   describe('when auth is enabled', () => {
@@ -254,17 +272,15 @@ describe('capabilities routers', () => {
         new OidcAuthenticator(),
       );
 
+      // Direct sandbox is enabled by default, so sandbox + skill stay enabled for both roles.
       const adminRes = await router.request('/', {
         headers: { Cookie: `id_token=${await createIdToken(['admin'])}` },
       });
       expect(adminRes.status).toBe(200);
       expect(await adminRes.json()).toEqual({
         data: {
-          sandbox: { enabled: false },
-          skill: {
-            enabled: false,
-            reason: 'Skills run in a sandbox, which is not configured.',
-          },
+          sandbox: { enabled: true },
+          skill: { enabled: true },
           settings: { enabled: true },
         },
       });
@@ -275,11 +291,8 @@ describe('capabilities routers', () => {
       expect(userRes.status).toBe(200);
       expect(await userRes.json()).toEqual({
         data: {
-          sandbox: { enabled: false },
-          skill: {
-            enabled: false,
-            reason: 'Skills run in a sandbox, which is not configured.',
-          },
+          sandbox: { enabled: true },
+          skill: { enabled: true },
           settings: { enabled: false },
         },
       });

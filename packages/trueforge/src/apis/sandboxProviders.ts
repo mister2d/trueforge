@@ -13,7 +13,7 @@ import {
   toDaytonaSandboxProvider,
   toSandboxStatus,
 } from '../sandbox/providerUtils';
-import type { SandboxProviderManifest, UpdateSandboxProviderRequest } from '../schemas/sandboxProvider';
+import type { SandboxProviderManifest, SandboxStatus, UpdateSandboxProviderRequest } from '../schemas/sandboxProvider';
 import { MissingStoredSecretError, resolveStoredSecretValue, toRedactedSecretValue } from '../utils/secretRedaction';
 
 /** Cap the Daytona register round-trip so a slow/unreachable provider can't hold the request (or DB txn) open. */
@@ -27,6 +27,9 @@ export interface SandboxProvidersRouterDeps<TTransaction> {
 }
 
 function redactSandboxProvider(manifest: SandboxProviderManifest): SandboxProviderManifest {
+  if (manifest.type !== 'daytona') {
+    return manifest;
+  }
   return {
     ...manifest,
     auth: { api_key: toRedactedSecretValue(manifest.auth.api_key) },
@@ -39,7 +42,8 @@ export function createSandboxProvidersRouter<TTransaction>(deps: SandboxProvider
     const requestContext = deps.resolveRequestContext(c);
     const store = deps.resolveSandboxProviderStore(c);
     const record = await store.getSandboxProvider(requestContext.tenant_id);
-    if (record?.manifest.type !== 'daytona') {
+    // The settings surface covers stored settings rows; env-synthesized truefoundry is not one.
+    if (record === undefined || record.manifest.type === 'truefoundry') {
       return c.json({ error: { message: 'No sandbox provider configured' } }, 404);
     }
     // Refresh the persisted build status (and re-activate an idle snapshot) on every GET.
@@ -65,31 +69,43 @@ export function createSandboxProvidersRouter<TTransaction>(deps: SandboxProvider
     const requestContext = deps.resolveRequestContext(c);
     const store = deps.resolveSandboxProviderStore(c);
     const incoming = body.manifest;
-    const resolveManifest = (existing: SandboxProviderRecord | undefined): SandboxProviderManifest => ({
-      ...incoming,
-      auth: {
-        api_key: resolveStoredSecretValue({
-          incoming: incoming.auth.api_key,
-          existing: existing?.manifest.type === 'daytona' ? existing.manifest.auth.api_key : undefined,
-        }),
-      },
-    });
+    const resolveManifest = (existing: SandboxProviderRecord | undefined): SandboxProviderManifest => {
+      if (incoming.type !== 'daytona') {
+        return incoming;
+      }
+      return {
+        ...incoming,
+        auth: {
+          api_key: resolveStoredSecretValue({
+            incoming: incoming.auth.api_key,
+            existing: existing?.manifest.type === 'daytona' ? existing.manifest.auth.api_key : undefined,
+          }),
+        },
+      };
+    };
     try {
       // NOTE: build (Daytona network I/O) runs inside the transaction for now; the design is being revisited.
+      // Direct has no external service: no build round-trip, always ready.
       const { manifest, status } = await deps.withTransaction(async transaction => {
         const locked = await store.getSandboxProviderForUpdate(requestContext.tenant_id, transaction);
         const resolved = resolveManifest(locked);
-        // Pass persisted build_metadata so a settings re-save does not start a new snapshot for a
-        // bumped SANDBOX_IMAGE_URI (upgrades are unsupported — first configure has no metadata).
-        const provider = toDaytonaSandboxProvider({
-          manifest: resolved,
-          tenant_id: requestContext.tenant_id,
-          logger: deps.logger,
-          ...(locked ? { build_metadata: locked.build_metadata } : {}),
-        });
-        const built = toSandboxStatus(
-          await withTimeout(provider.buildImage(), BUILD_REQUEST_TIMEOUT_MS, 'sandbox buildImage'),
-        );
+        const built: SandboxStatus =
+          resolved.type === 'daytona'
+            ? toSandboxStatus(
+                // Pass persisted build_metadata so a settings re-save does not start a new snapshot for a
+                // bumped SANDBOX_IMAGE_URI (upgrades are unsupported — first configure has no metadata).
+                await withTimeout(
+                  toDaytonaSandboxProvider({
+                    manifest: resolved,
+                    tenant_id: requestContext.tenant_id,
+                    logger: deps.logger,
+                    ...(locked ? { build_metadata: locked.build_metadata } : {}),
+                  }).buildImage(),
+                  BUILD_REQUEST_TIMEOUT_MS,
+                  'sandbox buildImage',
+                ),
+              )
+            : { status: 'ready', status_reason: null, build_metadata: null };
         await store.upsertSandboxProvider(
           { tenant_id: requestContext.tenant_id, manifest: resolved, ...built },
           transaction,
