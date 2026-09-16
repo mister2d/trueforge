@@ -104,4 +104,34 @@ describe('DirectSandboxProvider direct execution', () => {
     expect(getSkillPath({ skillsDir, skillName })).toBe(`${skillsDir}/${skillName}`);
     expect(await assertExecExitZero(`cat ${skillsDir}/${skillName}/SKILL.md`)).toContain('# Fake skill');
   }, 120_000);
+
+  it('allows uploadFile to overwrite read-only files across multi-turn session inits', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'tfy-direct-overwrite-'));
+    provider = new DirectSandboxProvider({
+      sandboxRootDir: rootDir,
+      logger: createLogger({ silent: true }),
+    });
+
+    const created = await provider.createSandbox();
+    sandboxId = created.sandboxId;
+
+    const testPath = 'mcp-client/mcp_client.py';
+    // Turn 1 upload + chmod 0555 (matching Sandbox.initSandboxEnvironment)
+    await provider.uploadFile({
+      sandboxId,
+      remotePath: testPath,
+      content: Buffer.from('print("turn 1 mcp_client")', 'utf8'),
+    });
+    await assertExecExitZero(`chmod 0555 ${testPath}`);
+
+    // Turn 2 re-init upload to the same path
+    await provider.uploadFile({
+      sandboxId,
+      remotePath: testPath,
+      content: Buffer.from('print("turn 2 mcp_client")', 'utf8'),
+    });
+
+    const downloaded = await provider.downloadFile({ sandboxId, path: testPath });
+    expect(downloaded.toString('utf8')).toBe('print("turn 2 mcp_client")');
+  }, 60_000);
 });

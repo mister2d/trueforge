@@ -149,5 +149,34 @@ export function runSandboxProviderContractSuite(
       });
       expect(Buffer.compare(downloaded, payload)).toBe(0);
     });
+
+    it('uploadFile can overwrite a read-only file', async () => {
+      const { sandboxId } = await fixture.provider.createSandbox();
+      const initialPayload = Buffer.from('initial-content\n', 'utf8');
+      const targetPath = 'readonly-test.txt';
+      await fixture.provider.uploadFile({
+        sandboxId,
+        remotePath: targetPath,
+        content: initialPayload,
+      });
+      const chmod = await fixture.provider.exec({
+        sandboxId,
+        command: `chmod 0555 ${targetPath}`,
+      });
+      ensureExecSuccess(chmod);
+
+      const updatedPayload = Buffer.from('updated-content\n', 'utf8');
+      await fixture.provider.uploadFile({
+        sandboxId,
+        remotePath: targetPath,
+        content: updatedPayload,
+      });
+
+      const downloaded = await fixture.provider.downloadFile({
+        sandboxId,
+        path: targetPath,
+      });
+      expect(Buffer.compare(downloaded, updatedPayload)).toBe(0);
+    });
   });
 }

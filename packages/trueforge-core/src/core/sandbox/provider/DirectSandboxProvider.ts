@@ -15,7 +15,7 @@
 import { execFile, spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import type { Logger } from 'winston';
@@ -375,6 +375,8 @@ export class DirectSandboxProvider implements SandboxProvider {
     this.ensureSandboxRoot(params.sandboxId);
     const fullPath = this.resolveInSandboxRoot(params.sandboxId, params.remotePath);
     await mkdir(resolve(fullPath, '..'), { recursive: true });
+    await chmod(fullPath, 0o600).catch(() => {});
+    await rm(fullPath, { force: true, recursive: true });
     await writeFile(fullPath, params.content);
   }
 
